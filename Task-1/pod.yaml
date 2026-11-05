@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-timestamp
+  labels:
+    app: hello-timestamp
+spec:
+  shareProcessNamespace: true
+## init Container
+  initContainers:
+    - name: init-done
+      image: busybox:1.36
+      command: ["sh", "-c", "echo done && exit 0"]
+
+  containers:
+## main container > nginx
+    - name: nginx
+      image: nginx:alpine
+      ports:
+        - containerPort: 80
+      command:
+        - sh
+        - -c
+        - |
+          TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+          echo "hello in MLOPS MENA COMMUNITY : $TIMESTAMP" > /usr/share/nginx/html/index.html
+          nginx -g "daemon off;"
+
+    - name: time-updater
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          while true; do
+            # Find the Nginx master process PID in the shared PID namespace
+            NGINX_PID=$(for p in /proc/[0-9]*; do
+              if grep -q "nginx: master" "$p/cmdline" 2>/dev/null; then
+                basename "$p"
+                break
+              fi
+            done)
+
+            if [ -n "$NGINX_PID" ]; then
+              TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+              echo "hello in MLOPS MENA COMMUNITY : $TIMESTAMP" \
+                > "/proc/$NGINX_PID/root/usr/share/nginx/html/index.html"
+            fi
+
+            sleep 5
+          done
